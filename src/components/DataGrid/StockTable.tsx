@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-table";
 
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useRouter } from "next/navigation";
 
 import type { Stock } from "@/types/stock";
 
@@ -122,6 +123,7 @@ const gridTemplateColumns =
 export default function StockTable({
   stocks,
 }: StockTableProps) {
+  const router = useRouter();
   const scrollRef =
     useRef<HTMLDivElement>(null);
 
@@ -303,12 +305,11 @@ export default function StockTable({
           Math.floor(650 / 36)
         );
 
-        setActiveRow((current) =>
-          Math.max(
-            0,
-            current - viewportRows
-          )
-        );
+        setActiveRow((current) => {
+          const next = Math.max(0, current - viewportRows);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
       }
 
       if (event.key === "PageDown") {
@@ -319,12 +320,11 @@ export default function StockTable({
           Math.floor(650 / 36)
         );
 
-        setActiveRow((current) =>
-          Math.min(
-            rows.length - 1,
-            current + viewportRows
-          )
-        );
+        setActiveRow((current) => {
+          const next = Math.min(rows.length - 1, current + viewportRows);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
       }
 
       if (event.key === "Enter") {
@@ -338,11 +338,7 @@ export default function StockTable({
             selectedRow.original.symbol;
 
           setSelectedStock(symbol);
-
-          console.log(
-            "Open stock detail:",
-            symbol
-          );
+          router.push(`/${encodeURIComponent(symbol)}`);
         }
       }
 
@@ -393,6 +389,7 @@ export default function StockTable({
     rows.length,
     rowVirtualizer,
     rows,
+    router,
   ]);
 
   const closeContextMenu = () => {
@@ -457,18 +454,47 @@ export default function StockTable({
             </span>
           </div>
 
-          <div className="text-slate-500">
-            Press{" "}
-            <kbd className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-300">
-              ?
-            </kbd>{" "}
-            for shortcuts
+          <div className="flex items-center gap-3 text-slate-500">
+            <label className="flex items-center gap-2">
+              <span>Row</span>
+              <input
+                aria-label="Scroll to row"
+                type="number"
+                min={1}
+                max={Math.max(1, rows.length)}
+                defaultValue={activeRow + 1}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  const value = Number((event.currentTarget as HTMLInputElement).value);
+                  if (!Number.isFinite(value)) return;
+                  const next = Math.min(
+                    Math.max(1, Math.floor(value)),
+                    Math.max(1, rows.length)
+                  ) - 1;
+                  setActiveRow(next);
+                  rowVirtualizer.scrollToIndex(next, { align: "center" });
+                  event.currentTarget.blur();
+                }}
+                className="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 outline-none"
+              />
+            </label>
+            <span>
+              Press{" "}
+              <kbd className="rounded border border-slate-700 px-1.5 py-0.5 text-slate-300">
+                ?
+              </kbd>{" "}
+              for shortcuts
+            </span>
           </div>
         </div>
 
         <div
           ref={scrollRef}
           tabIndex={0}
+          role="grid"
+          aria-label="Stock screener data grid"
+          aria-rowcount={rows.length}
+          aria-colcount={columns.length}
           className="h-[700px] overflow-auto outline-none"
         >
           <div
@@ -503,6 +529,8 @@ export default function StockTable({
                   return (
                     <div
                       key={header.id}
+                      role="columnheader"
+                      aria-colindex={header.index + 1}
                       onContextMenu={(event) =>
                         handleContextMenu(
                           event,
@@ -568,6 +596,8 @@ export default function StockTable({
                 return (
                   <div
                     key={row.id}
+                    role="row"
+                    aria-rowindex={virtualRow.index + 2}
                     className={`
                       absolute
                       left-0
@@ -625,6 +655,9 @@ export default function StockTable({
                           return (
                             <div
                               key={cell.id}
+                              role="gridcell"
+                              aria-colindex={columnIndex + 1}
+                              aria-selected={isActiveCell}
                               className={`
                                 h-[36px]
                                 flex
